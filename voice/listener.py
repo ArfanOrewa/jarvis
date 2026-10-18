@@ -29,6 +29,44 @@ class Listener:
         self._whisper_error: str | None = None
 
     # -- lazy Whisper ---------------------------------------------------
+    def _ensure_model_downloaded(self) -> str | None:
+        """Download the faster-whisper model files directly via HTTPS,
+        bypassing huggingface_hub (which has a metadata_errors kwargs bug
+        with some faster-whisper versions). Returns the local dir or None.
+        """
+        import os
+        try:
+            import requests
+        except ImportError:
+            return None
+        model_dir = os.path.join(os.path.expanduser("~"), ".cache",
+                                 "jarvis", "whisper-" + self.whisper_model)
+        os.makedirs(model_dir, exist_ok=True)
+        # files needed by faster-whisper for the base model
+        files = ["config.json", "model.bin", "tokenizer.json",
+                 "vocabulary.txt"]
+        base_url = ("https://huggingface.co/Systran/faster-whisper-"
+                    + self.whisper_model + "/resolve/main")
+        ok = True
+        for fname in files:
+            dest = os.path.join(model_dir, fname)
+            if os.path.exists(dest) and os.path.getsize(dest) > 0:
+                continue
+            try:
+                print(f"[listener] downloading {fname} ...")
+                r = requests.get(base_url + "/" + fname, stream=True,
+                                 timeout=120)
+                r.raise_for_status()
+                with open(dest, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=1 << 20):
+                        if chunk:
+                            f.write(chunk)
+            except Exception as exc:
+                print(f"[listener] download failed for {fname}: {exc}")
+                ok = False
+                break
+        return model_dir if ok else None
+
     def _load_whisper(self) -> bool:
         """Lazy-load the Whisper model on first transcribe. Returns True on success."""
         if self._whisper is not None:
@@ -38,8 +76,11 @@ class Listener:
         except ImportError as exc:
             self._whisper_error = f"faster_whisper not installed ({exc})"
             return False
+        # Try direct model path first (avoids huggingface_hub download bugs);
+        # fall back to letting faster-whisper resolve the model name itself.
+        model_path = self._ensure_model_downloaded() or self.whisper_model
         try:
-            self._whisper = WhisperModel(self.whisper_model,
+            self._whisper = WhisperModel(model_path,
                                          device="cpu", compute_type="int8")
             return True
         except Exception as exc:
