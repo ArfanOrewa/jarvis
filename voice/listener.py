@@ -173,7 +173,9 @@ class Listener:
             text = " ".join(seg.text for seg in segments).strip()
             return text
         except Exception as exc:
+            import traceback
             print(f"[listener] transcribe error: {exc}")
+            traceback.print_exc()
             return ""
         finally:
             if tmp_path:
