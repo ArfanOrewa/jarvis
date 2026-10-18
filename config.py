@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 # --- LLM ---------------------------------------------------------------
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = "type key here"
 BASE_URL = "https://openrouter.ai/api/v1"
 # Default model: reliable tool calling, cheap, fast.
 # Your existing model ("openai/gpt-6-luna-pro") also works — just swap it in.
